@@ -173,7 +173,9 @@ function shuffleOptionsKeepAnswer(q) {
   function renderQuestion() {
     const total = qList.length;
     const q = qList[qIndex];
-
+const shuffledQ = shuffleOptionsKeepAnswer(q);
+q.options = shuffledQ.options;
+q.answer  = shuffledQ.answer;
     els.qIndex.textContent = `${qIndex + 1}/${total}`;
     els.qDiff.textContent = diffLabel(q.difficulty);
     els.qText.textContent = q.text;
