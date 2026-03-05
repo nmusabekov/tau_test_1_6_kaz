@@ -31,8 +31,8 @@ const TIME_PER_QUESTION = 30;
 const STRICT_MODE = {
   // Тест қолжетімді уақыт терезесі (Алматы уақыты бойынша ISO)
   // Мысалы: 2026-03-10T09:00:00+05:00
-  windowStart: null,  // "2026-03-07T13:00:00+05:00"
-  windowEnd: null,    // "2026-03-07T14:05:00+05:00"
+  windowStart: null,  // "2026-03-06T00:00:00+05:00"
+  windowEnd: null,    // "2026-03-06T14:05:00+05:00"
 
   // Бір студентке бір рет (тәулік ішінде) рұқсат
   oneAttemptPerDay: true,
