@@ -1,21 +1,7 @@
-// ======= TAU RK1 APP (NORMAL / CLEAN) =======
-// Works with your current index.html ids:
-// quizTitle, fullName, groupSelect, btnStart, btnRules, loginMsg,
-// studentLine, timer, progressFill, qIndex, qText, options, btnSkip, quizMsg,
-// scoreBig, correctLine, sentLine, btnDownloadJson, btnRestart, resultMsg
-//
-// Requires config.js to define:
-// SUBMIT_URL, QUIZ_TITLE, TIME_PER_QUESTION, GROUPS, QUESTION_BANK, QUIZ_RULE,
-// SCORE_PER_QUESTION (usually 4), STRICT_MODE (object)
-//
-// Apps Script should support JSONP check:
-// GET  SUBMIT_URL?mode=check&fullName=...&group=...&callback=cb
-// and accept POST text/plain JSON payload for saving result.
-
 (function () {
   const $ = (id) => document.getElementById(id);
 
-  // ---------- Elements ----------
+  // --------- Screens / Elements ----------
   const screens = {
     login: $("screenLogin"),
     quiz: $("screenQuiz"),
@@ -47,7 +33,6 @@
     resultMsg: $("resultMsg"),
   };
 
-  // ---------- Helpers ----------
   function showScreen(name) {
     Object.values(screens).forEach((s) => s && s.classList.add("hidden"));
     screens[name] && screens[name].classList.remove("hidden");
@@ -80,18 +65,15 @@
     return a;
   }
 
-  // Shuffle options and keep answer correct (recompute answer index)
+  // перемешать варианты и пересчитать индекс правильного ответа
   function shuffleOptionsKeepAnswer(q) {
     const tagged = q.options.map((text, idx) => ({ text, idx }));
     const shuffled = shuffleArray(tagged);
     const newAnswer = shuffled.findIndex((x) => x.idx === q.answer);
-    return {
-      ...q,
-      options: shuffled.map((x) => x.text),
-      answer: newAnswer,
-    };
+    return { ...q, options: shuffled.map((x) => x.text), answer: newAnswer };
   }
 
+  // --------- STRICT window (optional) ----------
   function withinWindow() {
     const sm = (typeof STRICT_MODE === "object" && STRICT_MODE) ? STRICT_MODE : {};
     const { windowStart, windowEnd } = sm;
@@ -109,8 +91,8 @@
     return { ok: true };
   }
 
-  // JSONP check to avoid CORS
-  function jsonpCheckAttempt(fullName, group) {
+  // --------- JSONP check (no CORS) ----------
+  function jsonpCheckAttempt(fullName, group, dateKey) {
     return new Promise((resolve) => {
       const cbName = "tau_cb_" + Math.random().toString(36).slice(2);
       const script = document.createElement("script");
@@ -123,23 +105,17 @@
         }
       };
 
-      let url;
-      try {
-        url = new URL(SUBMIT_URL);
-      } catch (e) {
-        resolve({ ok: false, allowed: true, message: "SUBMIT_URL invalid" });
-        return;
-      }
-
+      const url = new URL(SUBMIT_URL);
       url.searchParams.set("mode", "check");
       url.searchParams.set("fullName", fullName);
       url.searchParams.set("group", group);
+      url.searchParams.set("dateKey", dateKey);
       url.searchParams.set("callback", cbName);
 
       script.src = url.toString();
       script.onerror = () => {
-        // If check fails, allow start (server will still block duplicate submit if configured)
-        resolve({ ok: false, allowed: true });
+        // если check не сработал — позволим начать, но сервер заблокирует при submit
+        resolve({ ok: false, allowed: true, hash: "" });
         script.remove();
         delete window[cbName];
       };
@@ -148,17 +124,12 @@
     });
   }
 
-  // Submit without blocking due to CORS:
-  // - First try sendBeacon (best for unload)
-  // - Else fetch no-cors (cannot read response)
+  // submit: no-cors/beacon (ответ не читаем)
   function submitNoCors(payload) {
     try {
       const blob = new Blob([JSON.stringify(payload)], { type: "text/plain;charset=utf-8" });
-      if (navigator.sendBeacon) {
-        return navigator.sendBeacon(SUBMIT_URL, blob);
-      }
-    } catch (e) { /* ignore */ }
-
+      if (navigator.sendBeacon) return navigator.sendBeacon(SUBMIT_URL, blob);
+    } catch (e) {}
     try {
       fetch(SUBMIT_URL, { method: "POST", mode: "no-cors", body: JSON.stringify(payload) });
       return true;
@@ -167,38 +138,45 @@
     }
   }
 
-  // ---------- State ----------
+  // --------- State ----------
   const sm = (typeof STRICT_MODE === "object" && STRICT_MODE) ? STRICT_MODE : {};
-  const MAX_LEAVES = Number.isFinite(sm.maxVisibilityLeaves) ? sm.maxVisibilityLeaves : 0;
+  const TIME = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
+  const SCORE_PER = (typeof SCORE_PER_QUESTION === "number" ? SCORE_PER_QUESTION : 4);
 
   let session = null;
   let qList = [];
   let qIndex = 0;
   let timerId = null;
-  let timeLeft = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
-  let visibilityLeaves = 0;
+  let timeLeft = TIME;
+
   let ended = false;
   let antiTriggered = false;
+  let antiReason = "";
+
+  // second tab lock
   let lockKey = null;
   let lockValue = null;
+  let lockPing = null;
 
   function resetAll() {
     session = null;
     qList = [];
     qIndex = 0;
-    visibilityLeaves = 0;
     ended = false;
     antiTriggered = false;
-    lockKey = null;
-    lockValue = null;
+    antiReason = "";
 
     if (timerId) { clearInterval(timerId); timerId = null; }
-    timeLeft = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
+    timeLeft = TIME;
 
-    // Clear lock if any
     try {
+      if (lockPing) clearInterval(lockPing);
+      lockPing = null;
       if (lockKey) localStorage.removeItem(lockKey);
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
+
+    lockKey = null;
+    lockValue = null;
 
     if (els.btnStart) els.btnStart.disabled = false;
   }
@@ -245,7 +223,7 @@
     const total = qList.length;
     const q = qList[qIndex];
 
-    // Shuffle options ONCE per question (stable)
+    // shuffle options only once per question (stable)
     if (!q._shuffledOnce) {
       const shuffled = shuffleOptionsKeepAnswer(q);
       q.options = shuffled.options;
@@ -256,26 +234,23 @@
     if (els.qIndex) els.qIndex.textContent = `${qIndex + 1}/${total}`;
     if (els.qText) els.qText.textContent = q.text || "";
 
-    // progress
     if (els.progressFill) {
       const pct = Math.round((qIndex / total) * 100);
       els.progressFill.style.width = `${pct}%`;
     }
 
     // options
-    if (els.options) {
-      els.options.innerHTML = "";
-      q.options.forEach((opt, idx) => {
-        const div = document.createElement("div");
-        div.className = "option";
-        div.textContent = opt;
-        div.onclick = () => chooseOption(idx);
-        els.options.appendChild(div);
-      });
-    }
+    els.options.innerHTML = "";
+    q.options.forEach((opt, idx) => {
+      const div = document.createElement("div");
+      div.className = "option";
+      div.textContent = opt;
+      div.onclick = () => chooseOption(idx);
+      els.options.appendChild(div);
+    });
 
     setMsg(els.quizMsg, "");
-    timeLeft = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
+    timeLeft = TIME;
     if (els.timer) els.timer.textContent = String(timeLeft);
 
     if (timerId) clearInterval(timerId);
@@ -288,8 +263,7 @@
       if (timeLeft <= 0) {
         clearInterval(timerId);
         timerId = null;
-        const used = Math.min((typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30),
-                              Math.round((Date.now() - started) / 1000));
+        const used = Math.min(TIME, Math.round((Date.now() - started) / 1000));
         timeoutMove(used);
       }
     }, 1000);
@@ -297,14 +271,12 @@
 
   function recordAnswer(chosenIdx, timedOut = false, usedSec = null) {
     const q = qList[qIndex];
-    if (q.chosenOption !== null) return; // already answered
+    if (q.chosenOption !== null) return;
 
     lockOptions();
 
     const now = Date.now();
-    const T = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
-    const used = usedSec !== null ? usedSec : Math.min(T, Math.round((now - (q._startedAtMs || now)) / 1000));
-
+    const used = usedSec !== null ? usedSec : Math.min(TIME, Math.round((now - (q._startedAtMs || now)) / 1000));
     q.chosenAt = nowISO();
     q.chosenOption = chosenIdx;
     q.timedOut = timedOut;
@@ -313,8 +285,7 @@
   }
 
   function nextQuestion() {
-    const total = qList.length;
-    if (qIndex >= total - 1) {
+    if (qIndex >= qList.length - 1) {
       finishQuiz(antiTriggered ? "terminated" : "finished");
       return;
     }
@@ -334,21 +305,20 @@
 
   function calcScore() {
     const correct = qList.filter((q) => q.isCorrect).length;
-    const per = (typeof SCORE_PER_QUESTION === "number" ? SCORE_PER_QUESTION : 4);
-    const score = Math.max(0, Math.min(100, correct * per));
+    const score = Math.max(0, Math.min(100, correct * SCORE_PER));
     return { correct, score };
   }
 
   function buildPayload(status, reason) {
     const { correct, score } = calcScore();
-
     return {
       type: "TAU_RK1_SUBMIT",
-      quizTitle: (typeof QUIZ_TITLE === "string" ? QUIZ_TITLE : "TAU RK1"),
+      quizTitle: QUIZ_TITLE,
       fullName: session.fullName,
       group: session.group,
-      sessionId: session.sessionId,
       dateKey: session.dateKey,
+      attemptHash: session.attemptHash || "",
+      sessionId: session.sessionId,
       startedAt: session.startedAt,
       finishedAt: nowISO(),
       correctCount: correct,
@@ -356,8 +326,6 @@
       score,
       status: status || "finished",
       reason: reason || "",
-      visibilityLeaves,
-      strictMode: sm,
       answers: qList.map((q) => ({
         id: q.id,
         difficulty: q.difficulty,
@@ -367,16 +335,10 @@
         chosenOption: q.chosenOption,
         isCorrect: q.isCorrect,
         timedOut: q.timedOut,
-        timeUsed: q.timeUsed,
+        timeUsed: q.timeUsed
       })),
-      userAgent: navigator.userAgent,
+      userAgent: navigator.userAgent
     };
-  }
-
-  function cleanupAnti() {
-    try {
-      if (lockKey) localStorage.removeItem(lockKey);
-    } catch (e) { /* ignore */ }
   }
 
   function finishQuiz(status) {
@@ -385,112 +347,112 @@
 
     if (timerId) { clearInterval(timerId); timerId = null; }
     lockOptions();
-    cleanupAnti();
 
-    const reason = antiTriggered ? (session && session.reason ? session.reason : "anti-cheat") : "";
+    // release second-tab lock
+    try {
+      if (lockPing) clearInterval(lockPing);
+      lockPing = null;
+      if (lockKey) localStorage.removeItem(lockKey);
+    } catch (e) {}
+
+    const reason = antiTriggered ? antiReason : "";
     const payload = buildPayload(status || "finished", reason);
-    session.payload = payload;
 
-    const { correct, score } = calcScore();
-
-    // UI result
+    // UI
     showScreen("result");
+    const { correct, score } = calcScore();
     if (els.scoreBig) els.scoreBig.textContent = String(score);
     if (els.correctLine) els.correctLine.textContent = `${correct} / ${qList.length}`;
     if (els.sentLine) els.sentLine.textContent = "Жіберілуде…";
     setMsg(els.resultMsg, "");
 
-    // submit (best effort, no-cors)
-    const ok = submitNoCors(payload);
-    if (ok) {
-      if (els.sentLine) els.sentLine.textContent = "Иә";
-      setMsg(els.resultMsg, "Нәтиже жіберілді ✅ (егер желі болса, кестеге түседі)", "ok");
-    } else {
-      if (els.sentLine) els.sentLine.textContent = "Жоқ";
-      setMsg(els.resultMsg, "Жіберілмеді. JSON жүктеп алып, кейін жіберуге болады.", "warn");
-    }
+    // submit (no CORS)
+    submitNoCors(payload);
+
+    // confirm saved via JSONP check: если allowed=false => попытка уже записана (значит сохранилось)
+    setTimeout(async () => {
+      try {
+        const confirm = await jsonpCheckAttempt(session.fullName, session.group, session.dateKey);
+        if (confirm && confirm.allowed === false) {
+          if (els.sentLine) els.sentLine.textContent = "Иә";
+          setMsg(els.resultMsg, "Нәтиже сәтті сақталды ✅");
+        } else {
+          if (els.sentLine) els.sentLine.textContent = "Жоқ";
+          setMsg(els.resultMsg, "Жауап сақталмады. JSON жүктеп алып, кейін жіберуге болады.");
+        }
+      } catch {
+        if (els.sentLine) els.sentLine.textContent = "Жоқ";
+        setMsg(els.resultMsg, "Желі қателігі. JSON жүктеп алып, кейін жіберуге болады.");
+      }
+    }, 1200);
   }
 
-  function forceTerminate(reasonText) {
+  // --------- Anti-cheat: terminate immediately ----------
+  function terminateNow(reasonText) {
     if (!session || ended) return;
     antiTriggered = true;
-    session.reason = reasonText || "anti-cheat";
-    setMsg(els.quizMsg, "Тест аяқталды: " + session.reason, "warn");
-    // Finish quickly
-    setTimeout(() => finishQuiz("terminated"), 300);
+    antiReason = reasonText || "anti-cheat";
+    setMsg(els.quizMsg, "Тест аяқталды: " + antiReason, "warn");
+    setTimeout(() => finishQuiz("terminated"), 250);
   }
 
-  // ---------- Anti-cheat guards ----------
   function installGuards() {
-    // No back button
+    // prevent back
     try {
       history.pushState(null, "", location.href);
-      window.onpopstate = function () {
-        history.pushState(null, "", location.href);
-      };
-    } catch (e) { /* ignore */ }
+      window.onpopstate = () => history.pushState(null, "", location.href);
+    } catch (e) {}
 
-    // Visibility / tab switch
+    // tab hide/switch => terminate
     document.addEventListener("visibilitychange", () => {
       if (!session || ended) return;
       if (screens.quiz.classList.contains("hidden")) return;
       if (document.visibilityState === "hidden") {
-        visibilityLeaves += 1;
-        if (MAX_LEAVES === 0) {
-          // strict: any leave ends immediately
-          forceTerminate("Қойындыдан шықты/свернул (тыйым салынған)");
-        } else if (visibilityLeaves > MAX_LEAVES) {
-          forceTerminate("Қойындыдан көп шықты (тыйым салынған)");
-        } else {
-          setMsg(els.quizMsg, `Ескерту: қойындыдан шығу (${visibilityLeaves}/${MAX_LEAVES}).`, "warn");
-        }
+        terminateNow("Қойындыдан шықты/свернул (тыйым салынған)");
       }
     });
 
-    // Alt+Tab / switching apps/windows
+    // Alt+Tab / switch window => terminate
     window.addEventListener("blur", () => {
       if (!session || ended) return;
       if (screens.quiz.classList.contains("hidden")) return;
-      forceTerminate("Терезеден шықты (Alt+Tab) (тыйым салынған)");
+      terminateNow("Терезеден шықты (Alt+Tab) (тыйым салынған)");
     });
 
-    // Refresh/close
+    // refresh/close => mark terminate + beacon best effort
     window.addEventListener("beforeunload", () => {
       if (!session || ended) return;
-      if (!sm.submitOnUnload) return;
-      // mark terminate and best-effort beacon
       antiTriggered = true;
-      session.reason = "Бетті жаңартты/жапты (тыйым салынған)";
-      const payload = buildPayload("terminated", session.reason);
+      antiReason = "Бетті жаңартты/жапты (тыйым салынған)";
+      const payload = buildPayload("terminated", antiReason);
       try {
         const blob = new Blob([JSON.stringify(payload)], { type: "text/plain;charset=utf-8" });
         if (navigator.sendBeacon) navigator.sendBeacon(SUBMIT_URL, blob);
-      } catch (e) { /* ignore */ }
+      } catch (e) {}
     });
 
-    // Second tab/session lock
+    // second tab lock (same fullName+group+date)
     try {
-      lockKey = "TAU_ACTIVE|" + session.fullName.trim().toLowerCase().replace(/\s+/g, " ") + "|" +
-                session.group.trim().toLowerCase().replace(/\s+/g, " ");
+      lockKey = "TAU_LOCK|" + session.fullName.toLowerCase().replace(/\s+/g, " ").trim()
+        + "|" + session.group.toLowerCase().replace(/\s+/g, " ").trim()
+        + "|" + session.dateKey;
       lockValue = session.sessionId;
 
       const existing = localStorage.getItem(lockKey);
       if (existing && existing !== lockValue) {
-        // Another active tab already exists
-        forceTerminate("Екінші вкладка ашылды (тыйым салынған)");
+        terminateNow("Екінші вкладка ашылды (тыйым салынған)");
         return;
       }
       localStorage.setItem(lockKey, lockValue);
 
-      // keep alive
-      const ping = setInterval(() => {
-        if (ended || !session) { clearInterval(ping); return; }
+      lockPing = setInterval(() => {
+        if (ended || !session) { clearInterval(lockPing); return; }
         try { localStorage.setItem(lockKey, lockValue); } catch (e) {}
       }, 1000);
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   }
 
-  // ---------- UI ----------
+  // --------- UI ----------
   function populateGroups() {
     if (!els.groupSelect) return;
     els.groupSelect.innerHTML = "";
@@ -503,13 +465,12 @@
   }
 
   function downloadJson() {
-    if (!session || !session.payload) return;
-    const safeName = String(session.fullName || "student").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_");
-    const safeGroup = String(session.group || "group").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "_");
-    const blob = new Blob([JSON.stringify(session.payload, null, 2)], { type: "application/json" });
+    if (!session) return;
+    const payload = buildPayload(antiTriggered ? "terminated" : "finished", antiReason);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `TAU_RK1_${safeGroup}_${safeName}.json`;
+    a.download = `TAU_RK1_${session.group}_${session.fullName.replace(/\s+/g, "_")}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -531,23 +492,23 @@
 
     const fullName = (els.fullName?.value || "").trim();
     const group = els.groupSelect?.value || "";
+    const dateKey = localDateKey();
 
     if (fullName.length < 6) { setMsg(els.loginMsg, "ФИО толық енгізіңіз.", "warn"); return; }
     if (!group) { setMsg(els.loginMsg, "Топты таңдаңыз.", "warn"); return; }
 
-    // Disable start button during check
     setMsg(els.loginMsg, "Тексерілуде…");
     if (els.btnStart) els.btnStart.disabled = true;
 
-    // 1) Server-side check: already attempted?
-    const check = await jsonpCheckAttempt(fullName, group);
+    // daily lock check
+    const check = await jsonpCheckAttempt(fullName, group, dateKey);
     if (check && check.allowed === false) {
-      setMsg(els.loginMsg, "Бұл ФИО және топ бойынша тестті қайта тапсыруға болмайды.", "warn");
+      setMsg(els.loginMsg, "Бүгін бұл ФИО және топ бойынша тест қайта тапсырылмайды.", "warn");
       if (els.btnStart) els.btnStart.disabled = false;
       return;
     }
 
-    // 2) Build quiz
+    // build quiz
     try {
       qList = buildQuiz();
     } catch (e) {
@@ -556,33 +517,30 @@
       return;
     }
 
-    // 3) Session
     session = {
       fullName,
       group,
+      dateKey,
+      attemptHash: (check && check.hash) ? check.hash : "",
       sessionId: Math.random().toString(36).slice(2) + "-" + Date.now().toString(36),
-      dateKey: localDateKey(),
       startedAt: nowISO(),
-      payload: null,
-      reason: "",
     };
 
-    // 4) Install guards
+    ended = false;
+    antiTriggered = false;
+    antiReason = "";
+
     installGuards();
 
-    // 5) Show quiz
     if (els.studentLine) els.studentLine.textContent = `${fullName} • ${group}`;
     showScreen("quiz");
     qIndex = 0;
-    ended = false;
-    antiTriggered = false;
     renderQuestion();
   }
 
-  // ---------- Bindings ----------
+  // --------- Bindings ----------
   if (els.btnStart) {
     els.btnStart.addEventListener("click", () => {
-      // prevent double click
       if (els.btnStart.disabled) return;
       startFlow();
     });
@@ -595,8 +553,7 @@
       clearInterval(timerId);
       timerId = null;
       const q = qList[qIndex];
-      const T = (typeof TIME_PER_QUESTION === "number" ? TIME_PER_QUESTION : 30);
-      const used = Math.min(T, Math.round((Date.now() - (q._startedAtMs || Date.now())) / 1000));
+      const used = Math.min(TIME, Math.round((Date.now() - (q._startedAtMs || Date.now())) / 1000));
       timeoutMove(used);
     });
   }
@@ -611,14 +568,14 @@
         "• Әр сұраққа 30 секунд.\n" +
         "• Жауап берген соң артқа қайту жоқ.\n" +
         "• Уақыт біткенде келесі сұрақ автоматты ашылады.\n" +
-        "• Қойынды/терезеден шықсаңыз тест аяқталуы мүмкін.\n" +
-        "• Бір ФИО + топ үшін тест 1 рет қана."
+        "• Қойынды/терезеден шықсаңыз немесе жаңартсаңыз — тест аяқталады.\n" +
+        "• Бір күнде (ФИО+топ) тест 1 рет қана."
       );
     });
   }
 
-  // ---------- Init ----------
-  if (els.quizTitle) els.quizTitle.textContent = (typeof QUIZ_TITLE === "string" ? QUIZ_TITLE : "TAU RK1");
+  // --------- Init ----------
+  if (els.quizTitle) els.quizTitle.textContent = QUIZ_TITLE;
   populateGroups();
   showScreen("login");
 })();
