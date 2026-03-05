@@ -8,6 +8,29 @@
     result: $("screenResult"),
   };
 
+function shuffleArray(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// возвращает новый вопрос, где options перемешаны и answer пересчитан
+function shuffleOptionsKeepAnswer(q) {
+  const opts = q.options.map((text, idx) => ({ text, idx })); // idx = старый индекс
+  const shuffled = shuffleArray(opts);
+
+  const newAnswer = shuffled.findIndex(x => x.idx === q.answer);
+
+  return {
+    ...q,
+    options: shuffled.map(x => x.text),
+    answer: newAnswer
+  };
+}
+  
   const els = {
     quizTitle: $("quizTitle"),
     fullName: $("fullName"),
