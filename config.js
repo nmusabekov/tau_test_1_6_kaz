@@ -1,16 +1,24 @@
 // ======= TAU RK1 CONFIG =======
-const SUBMIT_URL = "PASTE_YOUR_APPS_SCRIPT_WEBAPP_URL_HERE";
+const SUBMIT_URL = "https://script.google.com/macros/s/AKfycbxqFjqqnCYH7l0Gcm8kASzAqsA5iu27YIruPo_do-9lcWZRJZcj0ZqtLmpoRWXaKJgUyw/exec";
 
 // Пән/тест атауы
-const QUIZ_TITLE = "ТАУ — Рубежный контроль 1 (Дәріс 1–6)";
+const QUIZ_TITLE = "TAU 22211-ТАУ Тест 1 (Дәріс 1–6)";
 
 // Топтар тізімі (өзгертесіз)
 const GROUPS = [
-  "ТАУ-221",
-  "ТАУ-222",
-  "ТАУ-223",
-  "АУЭС-TAU-1",
-  "АУЭС-TAU-2"
+  "ЭЭк-24-1а",
+  "ЭЭк-24-1б",
+  "ЭЭк-24-2а",
+  "ЭЭк-24-2б",
+  "ЭЭк-24-3а",
+  "ЭЭк-24-3б",
+  "ЭЭк-24-4б",
+  "ЭЭк-24-5а",
+  "ЭЭк-24-5б",
+  "ЭЭк-24-6а",
+  "ЭЭк-24-6б",
+  "ЭЭк-24-7а",
+  "ЭЭк-24-7б"
 ];
 
 // Сұрақ ережесі: әр студентке кездейсоқ түседі
@@ -23,8 +31,8 @@ const TIME_PER_QUESTION = 30;
 const STRICT_MODE = {
   // Тест қолжетімді уақыт терезесі (Алматы уақыты бойынша ISO)
   // Мысалы: 2026-03-10T09:00:00+05:00
-  windowStart: null,  // "2026-03-10T09:00:00+05:00"
-  windowEnd: null,    // "2026-03-10T12:00:00+05:00"
+  windowStart: null,  // "2026-03-07T13:00:00+05:00"
+  windowEnd: null,    // "2026-03-07T14:05:00+05:00"
 
   // Бір студентке бір рет (тәулік ішінде) рұқсат
   oneAttemptPerDay: true,
