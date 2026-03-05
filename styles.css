@@ -40,3 +40,5 @@ input:focus,select:focus{border-color:#3a5ea9}
 .v{font-size:16px;font-weight:800;margin-top:6px}
 .footer{margin-top:14px;font-size:12px;text-align:center}
 code{background:#0b1222;border:1px solid #263556;padding:2px 6px;border-radius:10px}
+/* скрыть плашку сложности вопроса */
+#qDiff { display: none !important; }
