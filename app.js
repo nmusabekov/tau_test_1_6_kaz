@@ -375,14 +375,14 @@
         const confirm = await jsonpCheckAttempt(session.fullName, session.group, session.dateKey);
         if (confirm && confirm.allowed === false) {
           if (els.sentLine) els.sentLine.textContent = "Иә";
-          setMsg(els.resultMsg, "Нәтиже сәтті сақталды ✅");
+          setMsg(els.resultMsg, "Нәтиже сәтті сақталды ✅", "ok");
         } else {
           if (els.sentLine) els.sentLine.textContent = "Жоқ";
-          setMsg(els.resultMsg, "Жауап сақталмады. JSON жүктеп алып, кейін жіберуге болады.");
+          setMsg(els.resultMsg, "Жауап сақталмады. JSON жүктеп алып, кейін жіберуге болады.", "warn");
         }
       } catch {
         if (els.sentLine) els.sentLine.textContent = "Жоқ";
-        setMsg(els.resultMsg, "Желі қателігі. JSON жүктеп алып, кейін жіберуге болады.");
+        setMsg(els.resultMsg, "Желі қателігі. JSON жүктеп алып, кейін жіберуге болады.", "warn");
       }
     }, 1200);
   }
