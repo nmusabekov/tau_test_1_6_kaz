@@ -493,8 +493,7 @@ q.answer  = shuffledQ.answer;
   }
 
   // buttons
- els.btnStart.addEventListener("click", async () => {
-
+els.btnStart.addEventListener("click", async () => {
   const fullName = els.fullName.value.trim();
   const group = els.groupSelect.value;
 
@@ -503,7 +502,6 @@ q.answer  = shuffledQ.answer;
     return;
   }
 
-  // проверяем проходил ли уже студент
   const check = await jsonpCheckAttempt(fullName, group);
 
   if (check && check.allowed === false) {
@@ -512,11 +510,7 @@ q.answer  = shuffledQ.answer;
     return;
   }
 
-  state.attemptHash = check.hash || "";
-
-  // если все ок — запускаем тест
   startQuiz();
-
 });
   els.btnSkip.addEventListener("click", () => {
     if (!timer) return;
