@@ -1,5 +1,37 @@
 // ======= TAU RK1 APP =======
-(function () {
+function normKey(s) {
+  return String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function jsonpCheckAttempt(fullName, group) {
+  return new Promise((resolve) => {
+    const cbName = "tau_cb_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+
+    window[cbName] = (res) => {
+      try { resolve(res); } finally {
+        delete window[cbName];
+        script.remove();
+      }
+    };
+
+    const url = new URL(SUBMIT_URL);
+    url.searchParams.set("mode", "check");
+    url.searchParams.set("fullName", fullName);
+    url.searchParams.set("group", group);
+    url.searchParams.set("callback", cbName);
+
+    script.src = url.toString();
+    script.onerror = () => {
+      // если check не сработал — на всякий случай разрешаем старт, но блок будет на submit
+      resolve({ ok: false, allowed: true });
+      script.remove();
+      delete window[cbName];
+    };
+
+    document.head.appendChild(script);
+  });
+}(function () {
   const $ = (id) => document.getElementById(id);
 
   const screens = {
@@ -461,7 +493,31 @@ q.answer  = shuffledQ.answer;
   }
 
   // buttons
-  els.btnStart.addEventListener("click", startQuiz);
+ els.btnStart.addEventListener("click", async () => {
+
+  const fullName = els.fullName.value.trim();
+  const group = els.groupSelect.value;
+
+  if (!fullName || !group) {
+    els.loginMsg.textContent = "ФИО және топты енгізіңіз";
+    return;
+  }
+
+  // проверяем проходил ли уже студент
+  const check = await jsonpCheckAttempt(fullName, group);
+
+  if (check && check.allowed === false) {
+    els.loginMsg.textContent =
+      "Бұл ФИО және топ бойынша тестті қайта тапсыруға болмайды.";
+    return;
+  }
+
+  state.attemptHash = check.hash || "";
+
+  // если все ок — запускаем тест
+  startQuiz();
+
+});
   els.btnSkip.addEventListener("click", () => {
     if (!timer) return;
     clearInterval(timer);
