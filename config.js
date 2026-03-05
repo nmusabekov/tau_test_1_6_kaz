@@ -1,5 +1,5 @@
 // ======= TAU RK1 CONFIG =======
-const SUBMIT_URL = "https://script.google.com/macros/s/AKfycbxInNJ3b0bk_4YEzZeSYTzvTtOtvkKqCDQln5Zr8bVWghn170ApPQ348owVxjqHx_4gtg/exeс";
+const SUBMIT_URL = "https://script.google.com/macros/s/AKfycbw0ZNV3J-H_qa3lVMu9EJYPAE4vjGIvfJ21cJNBlWymiXYf35wg62Gr0KIiIYhSoY2VoQ/exec";
 
 // Пән/тест атауы
 const QUIZ_TITLE = "TAU 22211-ТАУ Тест 1 (Дәріс 1–6)";
