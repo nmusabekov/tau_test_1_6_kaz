@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="kk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ТАУ — РК1</title>
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">TAU</div>
+      <div class="headtext">
+        <h1 id="quizTitle">ТАУ — Рубежный контроль 1</h1>
+        <p class="muted">Дәріс 1–6 материалдары бойынша қысқа срез</p>
+      </div>
+    </header>
+
+    <main id="app">
+      <!-- Login -->
+      <section id="screenLogin" class="card">
+        <h2>Бастау</h2>
+        <p class="muted">ФИО мен топты енгізіңіз. Тест барысында артқа қайту болмайды. Әр сұраққа 30 секунд.</p>
+
+        <div class="form">
+          <label>
+            <span>ФИО</span>
+            <input id="fullName" type="text" placeholder="Мысалы: Мұсабеков Назарбек Расулбекович" autocomplete="name"/>
+          </label>
+
+          <label>
+            <span>Топ</span>
+            <select id="groupSelect"></select>
+          </label>
+
+          <div class="row">
+            <button id="btnStart" class="btn primary">Тесті бастау</button>
+            <button id="btnRules" class="btn">Ереже</button>
+          </div>
+
+          <div id="loginMsg" class="msg"></div>
+        </div>
+
+        <details class="details">
+          <summary>Мұғалімге арналған: орнату қысқаша</summary>
+          <ol>
+            <li><b>Apps Script Web App URL</b> — <code>config.js</code> ішіндегі <code>SUBMIT_URL</code> мәніне қойыңыз.</li>
+            <li>Топтарды <code>GROUPS</code> тізімінен өзгертіңіз.</li>
+            <li>Тест уақытын шектеу керек болса, <code>STRICT_MODE.windowStart/windowEnd</code> орнатыңыз.</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- Quiz -->
+      <section id="screenQuiz" class="card hidden">
+        <div class="topbar">
+          <div>
+            <div class="small muted">Студент</div>
+            <div id="studentLine" class="strong"></div>
+          </div>
+          <div class="timerbox">
+            <div class="small muted">Уақыт</div>
+            <div id="timer" class="timer">30</div>
+          </div>
+        </div>
+
+        <div class="progress">
+          <div id="progressFill" class="progressFill"></div>
+        </div>
+
+        <div class="qwrap">
+          <div class="qmeta">
+            <span id="qIndex" class="pill">1/25</span>
+            <span id="qDiff" class="pill diff">жеңіл</span>
+          </div>
+          <h2 id="qText" class="qtext"></h2>
+
+          <div id="options" class="options"></div>
+
+          <div class="row">
+            <button id="btnSkip" class="btn">Уақытым бітті / өткізу</button>
+          </div>
+
+          <div id="quizMsg" class="msg"></div>
+        </div>
+      </section>
+
+      <!-- Result -->
+      <section id="screenResult" class="card hidden">
+        <h2>Нәтиже</h2>
+        <p class="muted">Балл 100-ден есептелді.</p>
+
+        <div class="scorebox">
+          <div class="big" id="scoreBig">0</div>
+          <div class="muted">/ 100</div>
+        </div>
+
+        <div class="grid2">
+          <div class="kv">
+            <div class="k">Дұрыс жауап</div>
+            <div class="v" id="correctLine">0 / 25</div>
+          </div>
+          <div class="kv">
+            <div class="k">Жіберілді</div>
+            <div class="v" id="sentLine">—</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <button id="btnDownloadJson" class="btn">JSON жүктеу</button>
+          <button id="btnRestart" class="btn primary">Басты бет</button>
+        </div>
+
+        <div id="resultMsg" class="msg"></div>
+      </section>
+    </main>
+
+    <footer class="footer muted">
+      © TAU • RK1 • Offline-friendly
+    </footer>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
